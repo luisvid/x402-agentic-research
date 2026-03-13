@@ -1,0 +1,16 @@
+{
+  "name": "x402-agentic-research",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI buyer agent purchases Web3 market research via x402 payment protocol",
+  "scripts": {
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "dev:gateway": "pnpm --filter provider-gateway dev",
+    "dev:buyer": "pnpm --filter buyer-agent dev"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
