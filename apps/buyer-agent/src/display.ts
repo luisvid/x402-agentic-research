@@ -28,11 +28,11 @@ export function displayResult(result: AgentResult): void {
   if (result.keyFindings && result.keyFindings.length > 0) {
     console.log("\n--- Key Findings ---");
     for (const finding of result.keyFindings) {
-      const title =
-        (finding as { title?: string }).title ??
-        (finding as { type?: string }).type ??
-        "Finding";
-      console.log(`  - ${title}`);
+      const f = finding as { finding?: string; title?: string; event_type?: string; confidence?: string };
+      const text = f.finding ?? f.title ?? "Finding";
+      const tag = f.event_type ? ` [${f.event_type}]` : "";
+      const conf = f.confidence ? ` (${f.confidence})` : "";
+      console.log(`  - ${text}${tag}${conf}`);
     }
   }
 

@@ -53,21 +53,18 @@ def run_engine(req: ResearchRequest) -> ResearchResponse:
     logger.info(f"Running research pipeline: tier={req.tier}, max_queries={max_queries}")
     start = time.time()
 
-    # Run the workflow
-    final_state = None
+    # Run the workflow — stream yields {node_name: state_update} for each node
+    # Merge ALL node outputs, not just the last one
+    merged = dict(initial_state)
     for state in workflow.stream(initial_state, config={"configurable": {"thread_id": thread_id}}):
-        final_state = state
+        if isinstance(state, dict):
+            for node_name, node_output in state.items():
+                if isinstance(node_output, dict):
+                    logger.debug(f"Node '{node_name}' returned keys: {list(node_output.keys())}")
+                    merged.update(node_output)
 
     elapsed = time.time() - start
     logger.info(f"Pipeline complete in {elapsed:.1f}s")
-
-    # Extract the last state values (stream yields {node_name: state_update})
-    # Merge all updates into a single dict
-    merged = dict(initial_state)
-    if final_state:
-        for node_name, node_output in (final_state.items() if isinstance(final_state, dict) else []):
-            if isinstance(node_output, dict):
-                merged.update(node_output)
 
     # Build response
     analysis = merged.get("research_analysis_result")

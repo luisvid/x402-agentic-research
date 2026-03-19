@@ -11,6 +11,7 @@ Import fix: from utils.model_factory -> from ..utils.model_factory
 
 import json
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 from ..utils.model_factory import ModelFactory
@@ -96,18 +97,19 @@ def _format_articles_for_prompt(articles: List[Dict], max_chars: int = 800) -> s
 def _get_model_config(config: Dict[str, Any], step: str = "pro") -> Dict[str, Any]:
     model_config = config.get("model_config", {})
     agent_models = model_config.get("agent_models", {})
-    model = agent_models.get("research_analyzer", {}) or agent_models.get("tvl_analyzer", {})
 
     if step == "flash":
+        model = agent_models.get("query_generator_agent", {}) or agent_models.get("research_analyzer", {})
         return {
             "endpoint": model.get("endpoint", model_config.get("default_endpoint", "geia")),
-            "model": model.get("model", "vertex_ai/gemini-2.5-flash"),
+            "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL_FAST", "vertex_ai/gemini-2.5-flash")),
             "temperature": model.get("temperature", 0.1),
         }
     else:
+        model = agent_models.get("research_analyzer", {}) or agent_models.get("query_generator_agent", {})
         return {
             "endpoint": model.get("endpoint", model_config.get("default_endpoint", "geia")),
-            "model": model.get("model", "vertex_ai/gemini-2.5-pro"),
+            "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL", "vertex_ai/gemini-2.5-pro")),
             "temperature": model.get("temperature", 0.2),
         }
 

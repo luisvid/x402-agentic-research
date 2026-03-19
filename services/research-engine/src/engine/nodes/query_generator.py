@@ -9,6 +9,7 @@ Import fix: from utils.model_factory -> from ..utils.model_factory
 
 import json
 import logging
+import os
 from typing import Any, Dict, List
 
 from ..utils.model_factory import ModelFactory
@@ -75,10 +76,10 @@ def _generate_fallback_queries(parsed_context: Dict[str, Any]) -> List[str]:
 def _get_model_config(config: Dict[str, Any]) -> Dict[str, Any]:
     model_config = config.get("model_config", {})
     agent_models = model_config.get("agent_models", {})
-    model = agent_models.get("research_analyzer", {}) or agent_models.get("query_generator_agent", {})
+    model = agent_models.get("query_generator_agent", {}) or agent_models.get("research_analyzer", {})
     return {
         "endpoint": model.get("endpoint", model_config.get("default_endpoint", "geia")),
-        "model": model.get("model", "vertex_ai/gemini-2.5-flash"),
+        "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL_FAST", "vertex_ai/gemini-2.5-flash")),
         "temperature": model.get("temperature", 0.7),
     }
 

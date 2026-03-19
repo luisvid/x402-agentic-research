@@ -1,13 +1,13 @@
 /**
- * LLM-powered research agent — uses Anthropic tool-calling to orchestrate
- * tier selection, budget checks, and research purchases.
+ * LLM-powered research agent — uses OpenAI-compatible (GEIA) tool-calling
+ * to orchestrate tier selection, budget checks, and research purchases.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import type { AxiosInstance } from "axios";
 import type { Config } from "../config.js";
 import type { AgentResult } from "./types.js";
-import { SYSTEM_PROMPT, TOOL_DEFINITIONS } from "./prompts.js";
+import { SYSTEM_PROMPT, TOOL_DEFINITIONS_OPENAI } from "./prompts.js";
 import { executeTool, type ToolContext } from "./tools.js";
 import { BudgetTracker } from "../client/budget.js";
 import { logger } from "../index.js";
@@ -19,12 +19,16 @@ export async function runResearchAgent(
   config: Config,
   client: AxiosInstance,
 ): Promise<AgentResult> {
-  const anthropic = new Anthropic({ apiKey: config.AGENT_LLM_API_KEY });
+  const openai = new OpenAI({
+    apiKey: config.GEIA_API_KEY,
+    baseURL: config.GEIA_API_BASE,
+  });
   const budget = new BudgetTracker(config);
 
   const toolCtx: ToolContext = { client, budget };
 
-  const messages: Anthropic.MessageParam[] = [
+  const messages: OpenAI.ChatCompletionMessageParam[] = [
+    { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content: goal },
   ];
 
@@ -44,64 +48,60 @@ export async function runResearchAgent(
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     logger.info({ turn, messageCount: messages.length }, "Agent turn");
 
-    const response = await anthropic.messages.create({
-      model: config.AGENT_LLM_MODEL,
+    const response = await openai.chat.completions.create({
+      model: config.BUYER_LLM_MODEL,
       max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      tools: TOOL_DEFINITIONS as unknown as Anthropic.Tool[],
+      tools: TOOL_DEFINITIONS_OPENAI,
       messages,
     });
 
+    const choice = response.choices[0];
+    const message = choice.message;
+
     logger.debug(
-      { stopReason: response.stop_reason, contentBlocks: response.content.length },
+      { finishReason: choice.finish_reason, hasToolCalls: !!message.tool_calls?.length },
       "LLM response",
     );
 
     // If the model stops without tool use, we're done
-    if (response.stop_reason === "end_turn") {
-      const textBlock = response.content.find((b) => b.type === "text");
-      const text = textBlock && "text" in textBlock ? textBlock.text : "";
+    if (choice.finish_reason === "stop") {
+      const text = message.content ?? "";
       lastResult = {
         ...lastResult,
         summary: text,
         success: true,
+        error: undefined,
         cost: formatCost(budget),
       };
-      // Add assistant message for display purposes
-      messages.push({ role: "assistant", content: response.content });
+      messages.push(message);
       break;
     }
 
-    // Process tool use blocks
-    if (response.stop_reason === "tool_use") {
-      const toolUseBlocks = response.content.filter(
-        (b) => b.type === "tool_use",
-      );
+    // Process tool calls
+    if (choice.finish_reason === "tool_calls" && message.tool_calls?.length) {
+      messages.push(message);
 
-      // Add assistant message with tool_use content
-      messages.push({ role: "assistant", content: response.content });
-
-      const toolResults: Anthropic.ToolResultBlockParam[] = [];
-
-      for (const block of toolUseBlocks) {
-        if (block.type !== "tool_use") continue;
+      for (const toolCall of message.tool_calls) {
+        if (toolCall.type !== "function") continue;
+        const toolName = toolCall.function.name;
+        const toolInput = JSON.parse(toolCall.function.arguments);
 
         logger.info(
-          { tool: block.name, input: block.input },
+          { tool: toolName, input: toolInput },
           "Executing tool",
         );
 
         const result = await executeTool(
-          block.name,
-          block.input as Record<string, unknown>,
+          toolName,
+          toolInput as Record<string, unknown>,
           toolCtx,
         );
 
-        logger.debug({ tool: block.name, resultLen: result.length }, "Tool result");
+        logger.debug({ tool: toolName, resultLen: result.length }, "Tool result");
 
         // Track purchase details for the final result
-        if (block.name === "purchase_research") {
-          const input = block.input as {
+        if (toolName === "purchase_research") {
+          const input = toolInput as {
             query: string;
             start_date: string;
             end_date: string;
@@ -120,14 +120,12 @@ export async function runResearchAgent(
           };
         }
 
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
           content: result,
         });
       }
-
-      messages.push({ role: "user", content: toolResults });
     }
   }
 

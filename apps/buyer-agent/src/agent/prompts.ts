@@ -25,6 +25,7 @@ You have access to the following tools:
 - Use date ranges that make sense for the topic (typically 3-6 months).
 - If the purchase fails, explain the error clearly.`;
 
+/** Anthropic-format tool definitions (kept for reference) */
 export const TOOL_DEFINITIONS = [
   {
     name: "list_tiers",
@@ -82,3 +83,71 @@ export const TOOL_DEFINITIONS = [
     },
   },
 ] as const;
+
+/** OpenAI-format tool definitions (used by GEIA / OpenAI-compatible endpoints) */
+export const TOOL_DEFINITIONS_OPENAI = [
+  {
+    type: "function" as const,
+    function: {
+      name: "list_tiers",
+      description:
+        "List available research tiers with pricing, descriptions, and features.",
+      parameters: {
+        type: "object" as const,
+        properties: {},
+        required: [] as string[],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "check_budget",
+      description:
+        "Check if purchasing a specific tier is within the configured budget limits. Returns whether the purchase is allowed and the current budget status.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          tier: {
+            type: "string" as const,
+            enum: ["basic", "pro", "deep"],
+            description: "The research tier to check budget for",
+          },
+        },
+        required: ["tier"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "purchase_research",
+      description:
+        "Purchase a research report from the paid API. Handles x402 payment automatically. Returns the research results including summary, key findings, and optionally a full report.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          query: {
+            type: "string" as const,
+            description:
+              "The research query (minimum 10 characters). Should be specific and focused.",
+          },
+          start_date: {
+            type: "string" as const,
+            description: "Start date in YYYY-MM-DD format",
+          },
+          end_date: {
+            type: "string" as const,
+            description: "End date in YYYY-MM-DD format",
+          },
+          tier: {
+            type: "string" as const,
+            enum: ["basic", "pro", "deep"],
+            description: "Research tier to purchase",
+          },
+        },
+        required: ["query", "start_date", "end_date", "tier"],
+      },
+    },
+  },
+];

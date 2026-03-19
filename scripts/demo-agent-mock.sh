@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # demo-agent-mock.sh — Run the LLM agent demo in mock mode
 #
-# Requires AGENT_LLM_API_KEY to be set (Anthropic key).
+# Requires GEIA_API_KEY to be set.
 # The gateway and engine run in mock mode (no wallet/payments needed).
 
 set -euo pipefail
@@ -12,8 +12,8 @@ cd "$ROOT_DIR"
 export MOCK_MODE=true
 export LOG_LEVEL=info
 
-if [ -z "${AGENT_LLM_API_KEY:-}" ]; then
-  echo "ERROR: AGENT_LLM_API_KEY is required for agent mode."
+if [ -z "${GEIA_API_KEY:-}" ]; then
+  echo "ERROR: GEIA_API_KEY is required for agent mode."
   echo "       Set it in your environment or .env file."
   exit 1
 fi
@@ -23,7 +23,7 @@ echo "  x402 Agentic Research — Agent Demo (Mock)"
 echo "============================================================"
 echo ""
 echo "  Mode:     MOCK gateway + LLM agent"
-echo "  Model:    ${AGENT_LLM_MODEL:-claude-sonnet-4-20250514}"
+echo "  Model:    ${BUYER_LLM_MODEL:-vertex_ai/gemini-2.5-pro}"
 echo "  Engine:   http://localhost:8100"
 echo "  Gateway:  http://localhost:8200"
 echo ""

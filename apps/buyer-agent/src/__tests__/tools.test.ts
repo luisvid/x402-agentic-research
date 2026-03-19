@@ -12,8 +12,9 @@ function createConfig() {
   return {
     GATEWAY_URL: "http://localhost:8200",
     BUYER_EVM_PRIVATE_KEY: "0x01",
-    AGENT_LLM_API_KEY: "",
-    AGENT_LLM_MODEL: "claude-sonnet-4-20250514",
+    GEIA_API_KEY: "",
+    GEIA_API_BASE: "https://api.saia.ai/",
+    BUYER_LLM_MODEL: "vertex_ai/gemini-2.5-pro",
     LOG_LEVEL: "info" as const,
     MOCK_MODE: false,
     DAILY_BUDGET_USD: 1.0,

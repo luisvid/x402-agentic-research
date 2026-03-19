@@ -29,7 +29,7 @@ clean:
 demo-mock:
 	./scripts/demo-mock.sh
 
-# Demo: LLM agent against mock gateway (requires AGENT_LLM_API_KEY)
+# Demo: LLM agent against mock gateway (requires GEIA_API_KEY)
 demo-agent-mock:
 	./scripts/demo-agent-mock.sh
 

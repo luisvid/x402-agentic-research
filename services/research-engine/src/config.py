@@ -5,9 +5,17 @@ Tier matrix:
   basic: 8 queries, 20 results, Flash only, no report/causal chain
   pro:   15 queries, 40 results, Flash+Pro, full report
   deep:  25 queries, 60 results, Flash+Pro, full report
+
+Model selection is driven by environment variables:
+  PROVIDER_LLM_MODEL      — "strong" model for synthesis/analysis (default: vertex_ai/gemini-2.5-pro)
+  PROVIDER_LLM_MODEL_FAST — "fast" model for extraction/scoring  (default: vertex_ai/gemini-2.5-flash)
 """
 
+import os
 from typing import Any, Dict, Literal
+
+PROVIDER_LLM_MODEL = os.getenv("PROVIDER_LLM_MODEL", "vertex_ai/gemini-2.5-pro")
+PROVIDER_LLM_MODEL_FAST = os.getenv("PROVIDER_LLM_MODEL_FAST", "vertex_ai/gemini-2.5-flash")
 
 TIER_CONFIGS: Dict[str, Dict[str, Any]] = {
     "basic": {
@@ -21,8 +29,8 @@ TIER_CONFIGS: Dict[str, Dict[str, Any]] = {
         "model_config": {
             "default_endpoint": "geia",
             "agent_models": {
-                "research_analyzer": {"endpoint": "geia", "model": "vertex_ai/gemini-2.5-flash", "temperature": 0.1},
-                "query_generator_agent": {"endpoint": "geia", "model": "vertex_ai/gemini-2.5-flash", "temperature": 0.7},
+                "research_analyzer": {"endpoint": "geia", "model": PROVIDER_LLM_MODEL_FAST, "temperature": 0.1},
+                "query_generator_agent": {"endpoint": "geia", "model": PROVIDER_LLM_MODEL_FAST, "temperature": 0.7},
             },
         },
         "include_report": False,
@@ -39,8 +47,8 @@ TIER_CONFIGS: Dict[str, Dict[str, Any]] = {
         "model_config": {
             "default_endpoint": "geia",
             "agent_models": {
-                "research_analyzer": {"endpoint": "geia", "model": "vertex_ai/gemini-2.5-flash", "temperature": 0.1},
-                "query_generator_agent": {"endpoint": "geia", "model": "vertex_ai/gemini-2.5-flash", "temperature": 0.7},
+                "research_analyzer": {"endpoint": "geia", "model": PROVIDER_LLM_MODEL, "temperature": 0.1},
+                "query_generator_agent": {"endpoint": "geia", "model": PROVIDER_LLM_MODEL_FAST, "temperature": 0.7},
             },
         },
         "include_report": True,
@@ -57,8 +65,8 @@ TIER_CONFIGS: Dict[str, Dict[str, Any]] = {
         "model_config": {
             "default_endpoint": "geia",
             "agent_models": {
-                "research_analyzer": {"endpoint": "geia", "model": "vertex_ai/gemini-2.5-flash", "temperature": 0.1},
-                "query_generator_agent": {"endpoint": "geia", "model": "vertex_ai/gemini-2.5-flash", "temperature": 0.7},
+                "research_analyzer": {"endpoint": "geia", "model": PROVIDER_LLM_MODEL, "temperature": 0.1},
+                "query_generator_agent": {"endpoint": "geia", "model": PROVIDER_LLM_MODEL_FAST, "temperature": 0.7},
             },
         },
         "include_report": True,

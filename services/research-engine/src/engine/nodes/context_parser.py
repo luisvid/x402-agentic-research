@@ -9,6 +9,7 @@ Import fix: from utils.model_factory -> from ..utils.model_factory
 
 import json
 import logging
+import os
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -113,7 +114,7 @@ def _get_model_config(config: Dict[str, Any]) -> Dict[str, Any]:
     model = agent_models.get("research_analyzer", {}) or agent_models.get("query_generator_agent", {})
     return {
         "endpoint": model.get("endpoint", model_config.get("default_endpoint", "geia")),
-        "model": model.get("model", "vertex_ai/gemini-2.5-flash"),
+        "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL_FAST", "vertex_ai/gemini-2.5-flash")),
         "temperature": model.get("temperature", 0.1),
     }
 
