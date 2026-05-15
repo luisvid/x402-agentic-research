@@ -1,5 +1,5 @@
 /**
- * Admin routes — inspect audit trail and run records.
+ * Admin routes — inspect audit trail, run records, and quality flags.
  */
 
 import { Router, Request, Response } from "express";
@@ -26,6 +26,21 @@ export function adminRouter(store: AuditStore): Router {
       return;
     }
     res.json(record);
+  });
+
+  // POST /admin/flag/:id — mark a record with a quality issue
+  router.post("/flag/:id", (req: Request, res: Response) => {
+    const { reason } = req.body as { reason?: string };
+    if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+      res.status(400).json({ error: "reason is required" });
+      return;
+    }
+    const updated = store.flag(req.params.id, reason.trim());
+    if (!updated) {
+      res.status(404).json({ error: "Record not found" });
+      return;
+    }
+    res.json({ flagged: true, request_id: req.params.id, reason: reason.trim() });
   });
 
   return router;

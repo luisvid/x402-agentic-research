@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-node:
+    name: Node tests & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Lint
+        run: pnpm -r lint
+
+      - name: Test
+        run: pnpm -r test
+
+  test-python:
+    name: Python tests & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
+      - name: Install Python dependencies
+        working-directory: services/research-engine
+        run: uv sync --extra dev
+
+      - name: Lint
+        working-directory: services/research-engine
+        run: uv run ruff check src/ tests/
+
+      - name: Test
+        working-directory: services/research-engine
+        env:
+          MOCK_MODE: "true"
+        run: uv run python -m pytest
+
+  eval:
+    name: RAGAS eval (main branch only)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [test-node, test-python]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
+      - name: Install Python dependencies (with eval extras)
+        working-directory: services/research-engine
+        run: uv sync --extra dev
+
+      - name: Run RAGAS eval (mock mode)
+        working-directory: services/research-engine
+        env:
+          EVAL_MOCK_MODE: "true"
+          EVAL_MAX_CASES: "5"
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: uv run python -m tests.eval_ragas

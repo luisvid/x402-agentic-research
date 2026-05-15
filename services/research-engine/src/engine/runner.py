@@ -2,6 +2,7 @@
 Engine runner: builds initial state, calls workflow, extracts ResearchResponse.
 """
 
+import hashlib
 import logging
 import time
 from uuid import uuid4
@@ -11,6 +12,9 @@ from ..schemas import ResearchRequest, ResearchResponse
 from .workflow import build_research_workflow
 
 logger = logging.getLogger(__name__)
+
+# In-memory result cache keyed on (query, start_date, end_date, tier)
+_result_cache: dict = {}
 
 # Build workflow once at module level
 _workflow = None
@@ -23,8 +27,18 @@ def _get_workflow():
     return _workflow
 
 
+def _cache_key(query: str, start_date: str, end_date: str, tier: str) -> str:
+    raw = f"{query}|{start_date}|{end_date}|{tier}"
+    return hashlib.md5(raw.encode()).hexdigest()
+
+
 def run_engine(req: ResearchRequest) -> ResearchResponse:
     """Run the LangGraph research pipeline and return a ResearchResponse."""
+    cache_key = _cache_key(req.query, req.start_date, req.end_date, req.tier)
+    if cache_key in _result_cache:
+        logger.info(f"Cache hit for request (tier={req.tier}), returning cached result")
+        return _result_cache[cache_key]
+
     tier_config = build_engine_config(req.tier)
     max_queries = tier_config.get("max_queries", 15)
 
@@ -97,7 +111,12 @@ def run_engine(req: ResearchRequest) -> ResearchResponse:
         url = article.get("url", "")
         if url and url not in seen_urls:
             seen_urls.add(url)
-            sources.append({"title": article.get("title", ""), "url": url, "published_date": article.get("published_date")})
+            sources.append({
+                "title": article.get("title", ""),
+                "url": url,
+                "published_date": article.get("published_date"),
+                "snippet": article.get("content", "")[:500],
+            })
 
     # Determine status
     status = "completed"
@@ -112,7 +131,7 @@ def run_engine(req: ResearchRequest) -> ResearchResponse:
     include_report = tier_config.get("include_report", True)
     include_causal = tier_config.get("include_causal_chain", True)
 
-    return ResearchResponse(
+    response = ResearchResponse(
         request_id=req.request_id,
         status=status,
         tier=req.tier,
@@ -130,3 +149,8 @@ def run_engine(req: ResearchRequest) -> ResearchResponse:
             "total_sources": len(sources),
         },
     )
+
+    if status == "completed":
+        _result_cache[cache_key] = response
+
+    return response

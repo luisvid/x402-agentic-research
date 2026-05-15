@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 QUERY_GENERATION_PROMPT = """You are a research analyst generating search queries to find relevant news and articles.
 
-Given the following research topic/context, generate 15-25 diverse search queries that would find relevant articles, news, and analysis.
+Given the following research topic/context, generate exactly {max_queries} diverse search queries that would find relevant articles, news, and analysis.
 
 ## Research Context
 {context}
@@ -42,7 +42,7 @@ Generate queries that cover multiple angles:
 Each query should be 3-8 words, suitable for a news search engine.
 Avoid overly generic queries — be specific to the research topic.
 
-Respond with a JSON array of strings:
+Respond with a JSON array of exactly {max_queries} strings:
 ["query 1", "query 2", ...]
 """
 
@@ -78,8 +78,8 @@ def _get_model_config(config: Dict[str, Any]) -> Dict[str, Any]:
     agent_models = model_config.get("agent_models", {})
     model = agent_models.get("query_generator_agent", {}) or agent_models.get("research_analyzer", {})
     return {
-        "endpoint": model.get("endpoint", model_config.get("default_endpoint", "geia")),
-        "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL_FAST", "vertex_ai/gemini-2.5-flash")),
+        "endpoint": model.get("endpoint", model_config.get("default_endpoint", "openai")),
+        "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL_FAST", "gpt-4o-mini")),
         "temperature": model.get("temperature", 0.7),
     }
 
@@ -94,6 +94,7 @@ def generate_research_queries_node(state: Dict[str, Any]) -> Dict[str, Any]:
     context_text = parsed_context["original_context"]
     start_date = parsed_context["start_date"]
     end_date = parsed_context["end_date"]
+    max_queries = config.get("max_queries", 15)
 
     queries: list[str] = []
     model_cfg = _get_model_config(config)
@@ -102,7 +103,7 @@ def generate_research_queries_node(state: Dict[str, Any]) -> Dict[str, Any]:
         llm = ModelFactory.create_model(
             endpoint=model_cfg["endpoint"], model_name=model_cfg["model"], temperature=model_cfg["temperature"]
         )
-        prompt = QUERY_GENERATION_PROMPT.format(context=context_text, start_date=start_date, end_date=end_date)
+        prompt = QUERY_GENERATION_PROMPT.format(context=context_text, start_date=start_date, end_date=end_date, max_queries=max_queries)
         response = llm.invoke(prompt)
         content = response.content if hasattr(response, "content") else str(response)
 
@@ -113,13 +114,13 @@ def generate_research_queries_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         parsed = json.loads(content.strip())
         if isinstance(parsed, list):
-            queries = [q for q in parsed if isinstance(q, str) and q.strip()]
+            queries = [q for q in parsed if isinstance(q, str) and q.strip()][:max_queries]
             logger.info(f"LLM generated {len(queries)} search queries")
     except Exception as e:
         logger.warning(f"LLM query generation failed: {e}, using fallback")
 
     if not queries:
-        queries = _generate_fallback_queries(parsed_context)
+        queries = _generate_fallback_queries(parsed_context)[:max_queries]
         logger.info(f"Using {len(queries)} fallback queries")
 
     search_batch = {

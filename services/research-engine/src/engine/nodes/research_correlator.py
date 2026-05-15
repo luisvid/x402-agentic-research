@@ -105,10 +105,14 @@ def correlate_research_node(state: Dict[str, Any]) -> Dict[str, Any]:
     include_terms = parsed_context.get("include_terms", [])
     exclude_terms = parsed_context.get("exclude_terms", [])
 
+    n0 = len(articles)
     articles = _validate_urls(articles)
+    logger.info(f"After URL validation: {len(articles)}/{n0} articles")
     articles = _filter_by_terms(articles, include_terms, exclude_terms)
+    logger.info(f"After term filter (include={include_terms}, exclude={exclude_terms}): {len(articles)} articles")
     articles = _penalize_generic_content(articles)
     articles = _filter_by_desired_info(articles, desired_info, non_desired_info)
+    logger.info(f"After desired-info filter: {len(articles)} articles")
 
     if not articles:
         return {"research_search_results": [], "clustered_events": [], "errors": []}

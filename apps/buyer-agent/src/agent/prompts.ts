@@ -84,7 +84,7 @@ export const TOOL_DEFINITIONS = [
   },
 ] as const;
 
-/** OpenAI-format tool definitions (used by GEIA / OpenAI-compatible endpoints) */
+/** OpenAI-format tool definitions */
 export const TOOL_DEFINITIONS_OPENAI = [
   {
     type: "function" as const,

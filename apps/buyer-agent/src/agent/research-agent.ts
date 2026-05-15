@@ -1,6 +1,10 @@
 /**
- * LLM-powered research agent — uses OpenAI-compatible (GEIA) tool-calling
- * to orchestrate tier selection, budget checks, and research purchases.
+ * LLM-powered research agent — tool-calling loop that orchestrates
+ * tier selection, budget checks, and research purchases.
+ *
+ * Two-model strategy:
+ *   - Pre-purchase turns use BUYER_LLM_MODEL_FAST (tool routing — no reasoning needed)
+ *   - Post-purchase turns use BUYER_LLM_MODEL (summarization — needs capable model)
  */
 
 import OpenAI from "openai";
@@ -10,7 +14,16 @@ import type { AgentResult } from "./types.js";
 import { SYSTEM_PROMPT, TOOL_DEFINITIONS_OPENAI } from "./prompts.js";
 import { executeTool, type ToolContext } from "./tools.js";
 import { BudgetTracker } from "../client/budget.js";
+import { createLLMClient } from "./llm-factory.js";
 import { logger } from "../index.js";
+
+let wrapOpenAI: ((client: OpenAI) => OpenAI) | undefined;
+try {
+  const langsmith = await import("langsmith/wrappers");
+  wrapOpenAI = langsmith.wrapOpenAI as (client: OpenAI) => OpenAI;
+} catch {
+  // langsmith not installed or LANGCHAIN_TRACING_V2 not set — tracing disabled
+}
 
 const MAX_TURNS = 10;
 
@@ -19,10 +32,8 @@ export async function runResearchAgent(
   config: Config,
   client: AxiosInstance,
 ): Promise<AgentResult> {
-  const openai = new OpenAI({
-    apiKey: config.GEIA_API_KEY,
-    baseURL: config.GEIA_API_BASE,
-  });
+  const rawClient = createLLMClient(config);
+  const openai = wrapOpenAI ? wrapOpenAI(rawClient) : rawClient;
   const budget = new BudgetTracker(config);
 
   const toolCtx: ToolContext = { client, budget };
@@ -48,8 +59,14 @@ export async function runResearchAgent(
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     logger.info({ turn, messageCount: messages.length }, "Agent turn");
 
+    // Use fast model until a successful purchase is recorded, then switch to strong model
+    const isPurchased = messages.some(
+      (m) => m.role === "tool" && typeof m.content === "string" && m.content.includes('"success":true'),
+    );
+    const model = isPurchased ? config.BUYER_LLM_MODEL : config.BUYER_LLM_MODEL_FAST;
+
     const response = await openai.chat.completions.create({
-      model: config.BUYER_LLM_MODEL,
+      model,
       max_tokens: 4096,
       tools: TOOL_DEFINITIONS_OPENAI,
       messages,
@@ -59,7 +76,7 @@ export async function runResearchAgent(
     const message = choice.message;
 
     logger.debug(
-      { finishReason: choice.finish_reason, hasToolCalls: !!message.tool_calls?.length },
+      { finishReason: choice.finish_reason, hasToolCalls: !!message.tool_calls?.length, model },
       "LLM response",
     );
 

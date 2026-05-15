@@ -20,6 +20,7 @@ export interface RunRecord {
   engine_latency_ms: number | null;
   created_at: string;
   completed_at: string | null;
+  quality_flag: string | null;
 }
 
 export class AuditStore {
@@ -44,13 +45,20 @@ export class AuditStore {
         provider_status TEXT NOT NULL DEFAULT 'pending',
         engine_latency_ms INTEGER,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        completed_at TEXT
+        completed_at TEXT,
+        quality_flag TEXT
       )
     `);
+    // Migrate existing databases that predate quality_flag column
+    try {
+      this.db.exec("ALTER TABLE run_records ADD COLUMN quality_flag TEXT");
+    } catch {
+      // Column already exists — ignore
+    }
     logger.info("Audit store initialized");
   }
 
-  insert(record: Omit<RunRecord, "completed_at">): void {
+  insert(record: Omit<RunRecord, "completed_at" | "quality_flag">): void {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO run_records
         (request_id, query, tier, quoted_price, asset, network, payment_status, provider_status, engine_latency_ms, created_at)
@@ -85,6 +93,14 @@ export class AuditStore {
       "SELECT * FROM run_records WHERE request_id = ?",
     );
     return stmt.get(requestId) as RunRecord | undefined;
+  }
+
+  flag(requestId: string, reason: string): boolean {
+    const stmt = this.db.prepare(
+      "UPDATE run_records SET quality_flag = ? WHERE request_id = ?",
+    );
+    const result = stmt.run(reason, requestId);
+    return result.changes > 0;
   }
 
   close(): void {

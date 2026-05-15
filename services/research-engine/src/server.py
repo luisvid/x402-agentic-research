@@ -8,6 +8,7 @@ from fastapi import FastAPI, HTTPException
 
 from .schemas import ResearchRequest, ResearchResponse
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger(__name__)
 
 MOCK_MODE = os.getenv("MOCK_MODE", "false").lower() == "true"

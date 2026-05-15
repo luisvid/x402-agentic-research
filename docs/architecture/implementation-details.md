@@ -136,7 +136,7 @@ Hardcoded pricing: basic=$0.01, pro=$0.03, deep=$0.05.
 `runResearchAgent(goal, config, client)` orchestrates up to 10 LLM tool-calling turns:
 
 ```
-Initialize OpenAI client (GEIA endpoint)
+Initialize OpenAI client via llm-factory.ts (provider from LLM_PROVIDER config)
 Set messages = [system_prompt, user_goal]
 
 FOR turn 0..9:
@@ -170,7 +170,7 @@ Three tools available to the agent, all return JSON strings:
 
 | Destination | Protocol | Purpose |
 |-------------|----------|---------|
-| GEIA (`api.saia.ai/v1`) | OpenAI-compatible REST | LLM tool-calling (agent reasoning) |
+| OpenAI / Anthropic | REST | LLM tool-calling (agent reasoning), selected by `LLM_PROVIDER` |
 | Provider Gateway (`:8200`) | HTTP POST | Research purchase via `/research/{tier}` |
 | Base Sepolia RPC | JSON-RPC | EIP-3009 payment signing (via viem) |
 
@@ -353,7 +353,7 @@ src/
     │   ├── query_generator.py          # Node 2: Generate search queries (LLM)
     │   ├── date_range_searcher.py      # Node 3: Execute web searches
     │   ├── research_correlator.py      # Node 4: Filter, cluster, deduplicate articles
-    │   ├── article_scorer.py           # Node 5: LLM relevance scoring
+    │   ├── article_scorer.py           # Node 5: Embedding-based relevance scoring (cosine similarity)
     │   ├── research_analyzer.py        # Node 6: 3-step causal analysis (LLM)
     │   └── report_generator.py         # Node 7: Jinja2 report rendering
     ├── clustering/
@@ -361,7 +361,7 @@ src/
     ├── search/
     │   └── unified_search_engine.py    # Multi-provider search (Tavily, Serper, DuckDuckGo)
     └── utils/
-        ├── model_factory.py            # LangChain ChatModel factory (GEIA, OpenAI, Anthropic)
+        ├── model_factory.py            # LangChain ChatModel factory (OpenAI, Anthropic)
         └── model_manager.py            # Singleton cache for SentenceTransformer model
 ```
 
@@ -569,7 +569,7 @@ The runner is the critical orchestrator:
 
 | Destination | Protocol | Purpose |
 |-------------|----------|---------|
-| GEIA (`api.saia.ai/v1`) | OpenAI-compatible REST | LLM calls via LangChain `ChatOpenAI` (nodes 1,2,5,6) |
+| OpenAI / Anthropic | REST | LLM calls via LangChain (nodes 1,2,6), selected by `LLM_PROVIDER` |
 | Tavily API | REST | Web search (node 3, default provider) |
 | Serper/DuckDuckGo | REST | Alternative search providers (node 3) |
 
@@ -584,7 +584,7 @@ sequenceDiagram
     participant User
     participant CLI as index.ts
     participant Agent as research-agent.ts
-    participant LLM as GEIA LLM
+    participant LLM as LLM Provider
     participant Tools as tools.ts
     participant Budget as budget.ts
     participant X402 as x402-client.ts

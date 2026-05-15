@@ -3,8 +3,6 @@ Context Parser Node for Research Analysis.
 
 Reads free-text research context, extracts topics/entities/keywords,
 validates dates, and optionally uses LLM for semantic understanding.
-
-Import fix: from utils.model_factory -> from ..utils.model_factory
 """
 
 import json
@@ -18,7 +16,13 @@ from ..utils.model_factory import ModelFactory
 
 logger = logging.getLogger(__name__)
 
-SEMANTIC_ANALYSIS_PROMPT = """Analyze the following research context and extract semantic understanding. This will guide downstream search and analysis.
+# Regex patterns for metric direction — eliminates one LLM output field
+_DECREASE_RE = re.compile(r"\b(drop|drops|dropped|fell|declin|crash|dump|slump|plunge|down|reduc|shrink)\b", re.I)
+_INCREASE_RE = re.compile(r"\b(rise|rose|surge|jump|rally|soar|climb|up|gain|growth|grow)\b", re.I)
+_VOLATILE_RE = re.compile(r"\b(volatile|oscillat|fluctuat|unstable|swing|erratic)\b", re.I)
+
+# Narrowed prompt: only 3 fields (metric_direction and key_entities are now derived locally)
+SEMANTIC_ANALYSIS_PROMPT = """Analyze the following research context and extract semantic understanding.
 
 ## Research Context
 {context}
@@ -32,21 +36,26 @@ Determine:
    - "event_explanation" — Asking what caused a specific metric change
    - "trend_analysis" — Asking about evolution over time
    - "general_research" — Broad research without a specific causal question
-2. **metric_direction** — If a metric is mentioned, what direction did it move?
-   - "decrease", "increase", "volatile", "stable", or "unknown"
-3. **metric_magnitude** — Quantify the change if numbers are provided
-4. **key_entities** — The main entities, protocols, or products mentioned (up to 5)
-5. **suggested_event_types** — Based on the context, what types of events should be searched for? (up to 5)
+2. **metric_magnitude** — Quantify the change if numbers are provided (empty string if none)
+3. **suggested_event_types** — Based on the context, what types of events should be searched for? (up to 5)
 
 Respond with ONLY valid JSON. No other text.
 {{
   "query_intent": "event_explanation|trend_analysis|general_research",
-  "metric_direction": "decrease|increase|volatile|stable|unknown",
   "metric_magnitude": "description or empty string",
-  "key_entities": ["entity1", "entity2"],
   "suggested_event_types": ["type1", "type2"]
 }}
 """
+
+
+def _infer_metric_direction(text: str) -> str:
+    if _DECREASE_RE.search(text):
+        return "decrease"
+    if _INCREASE_RE.search(text):
+        return "increase"
+    if _VOLATILE_RE.search(text):
+        return "volatile"
+    return "unknown"
 
 
 def _extract_topics_and_entities(text: str) -> Dict[str, List[str]]:
@@ -113,8 +122,8 @@ def _get_model_config(config: Dict[str, Any]) -> Dict[str, Any]:
     agent_models = model_config.get("agent_models", {})
     model = agent_models.get("research_analyzer", {}) or agent_models.get("query_generator_agent", {})
     return {
-        "endpoint": model.get("endpoint", model_config.get("default_endpoint", "geia")),
-        "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL_FAST", "vertex_ai/gemini-2.5-flash")),
+        "endpoint": model.get("endpoint", model_config.get("default_endpoint", "openai")),
+        "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL_FAST", "gpt-4o-mini")),
         "temperature": model.get("temperature", 0.1),
     }
 
@@ -175,10 +184,32 @@ def parse_research_context_node(state: Dict[str, Any]) -> Dict[str, Any]:
     include_terms = research_config.get("search_terms_include", [])
     exclude_terms = research_config.get("search_terms_exclude", [])
 
-    if not include_terms:
-        include_terms = extracted["entities"] + extracted["acronyms"]
+    # metric_direction derived from regex — no LLM call needed
+    metric_direction = _infer_metric_direction(context_text)
 
-    semantic_analysis = _run_semantic_analysis(config, context_text, date_validation["start_date"], date_validation["end_date"])
+    # LLM handles only the 3 fields that genuinely need reasoning
+    llm_result = _run_semantic_analysis(config, context_text, date_validation["start_date"], date_validation["end_date"])
+
+    # Merge LLM output with locally-derived fields
+    semantic_analysis: Optional[Dict[str, Any]] = None
+    if llm_result:
+        semantic_analysis = {
+            "query_intent": llm_result.get("query_intent", "general_research"),
+            "metric_direction": metric_direction,
+            "metric_magnitude": llm_result.get("metric_magnitude", ""),
+            # key_entities taken from regex extraction — avoids duplicate LLM call
+            "key_entities": extracted["entities"][:5],
+            "suggested_event_types": llm_result.get("suggested_event_types", []),
+        }
+    else:
+        # Full fallback — no LLM
+        semantic_analysis = {
+            "query_intent": "general_research",
+            "metric_direction": metric_direction,
+            "metric_magnitude": "",
+            "key_entities": extracted["entities"][:5],
+            "suggested_event_types": [],
+        }
 
     parsed_context = {
         "original_context": context_text,

@@ -101,15 +101,15 @@ def _get_model_config(config: Dict[str, Any], step: str = "pro") -> Dict[str, An
     if step == "flash":
         model = agent_models.get("query_generator_agent", {}) or agent_models.get("research_analyzer", {})
         return {
-            "endpoint": model.get("endpoint", model_config.get("default_endpoint", "geia")),
-            "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL_FAST", "vertex_ai/gemini-2.5-flash")),
+            "endpoint": model.get("endpoint", model_config.get("default_endpoint", "openai")),
+            "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL_FAST", "gpt-4o-mini")),
             "temperature": model.get("temperature", 0.1),
         }
     else:
         model = agent_models.get("research_analyzer", {}) or agent_models.get("query_generator_agent", {})
         return {
-            "endpoint": model.get("endpoint", model_config.get("default_endpoint", "geia")),
-            "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL", "vertex_ai/gemini-2.5-pro")),
+            "endpoint": model.get("endpoint", model_config.get("default_endpoint", "openai")),
+            "model": model.get("model", os.environ.get("PROVIDER_LLM_MODEL", "gpt-4o")),
             "temperature": model.get("temperature", 0.2),
         }
 
