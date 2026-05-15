@@ -77,4 +77,9 @@ jobs:
           EVAL_MOCK_MODE: "true"
           EVAL_MAX_CASES: "5"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: uv run python -m tests.eval_ragas
+        run: |
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "OPENAI_API_KEY secret not configured — skipping RAGAS eval"
+            exit 0
+          fi
+          uv run python -m tests.eval_ragas
