@@ -1,11 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { SYSTEM_PROMPT, TOOL_DEFINITIONS } from "../agent/prompts.js";
+import { buildSystemPrompt, TOOL_DEFINITIONS } from "../agent/prompts.js";
 
 describe("agent prompts", () => {
   it("system prompt mentions all three tools", () => {
-    expect(SYSTEM_PROMPT).toContain("list_tiers");
-    expect(SYSTEM_PROMPT).toContain("check_budget");
-    expect(SYSTEM_PROMPT).toContain("purchase_research");
+    const prompt = buildSystemPrompt();
+    expect(prompt).toContain("list_tiers");
+    expect(prompt).toContain("check_budget");
+    expect(prompt).toContain("purchase_research");
+  });
+
+  it("system prompt includes today's date", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    expect(buildSystemPrompt()).toContain(today);
   });
 
   it("tool definitions have correct structure", () => {

@@ -11,7 +11,7 @@ import OpenAI from "openai";
 import type { AxiosInstance } from "axios";
 import type { Config } from "../config.js";
 import type { AgentResult } from "./types.js";
-import { SYSTEM_PROMPT, TOOL_DEFINITIONS_OPENAI } from "./prompts.js";
+import { buildSystemPrompt, TOOL_DEFINITIONS_OPENAI } from "./prompts.js";
 import { executeTool, type ToolContext } from "./tools.js";
 import { BudgetTracker } from "../client/budget.js";
 import { createLLMClient } from "./llm-factory.js";
@@ -39,7 +39,7 @@ export async function runResearchAgent(
   const toolCtx: ToolContext = { client, budget };
 
   const messages: OpenAI.ChatCompletionMessageParam[] = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: buildSystemPrompt() },
     { role: "user", content: goal },
   ];
 

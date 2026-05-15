@@ -26,9 +26,14 @@ def search_date_range_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if not batches:
         return {"research_search_results": [], "raw_articles": [], "errors": []}
 
+    parsed_context = state.get("research_parsed_context") or {}
+    query_intent = (parsed_context.get("semantic_analysis") or {}).get("query_intent", "general_research")
+    # Only restrict to news articles for event/trend queries — general research needs broader results
+    use_news_topic = query_intent in ("event_explanation", "trend_analysis")
+
     engine = UnifiedSearchEngine()
     provider_name = engine.get_provider_name()
-    logger.info(f"Research search using {provider_name}")
+    logger.info(f"Research search using {provider_name} (query_intent={query_intent}, news_topic={use_news_topic})")
 
     all_articles = []
 
@@ -53,6 +58,7 @@ def search_date_range_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 max_results_per_query=max_results_per_query,
                 start_date=start_date,
                 end_date=end_date,
+                use_news_topic=use_news_topic,
             )
         except Exception as e:
             logger.error(f"Search failed: {e}")

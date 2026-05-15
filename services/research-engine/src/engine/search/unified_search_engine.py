@@ -43,7 +43,7 @@ class TavilyProvider(SearchProvider):
         self.client = TavilyClient(api_key=api_key)
         logger.info("Tavily search provider initialized")
 
-    def search(self, queries, days_back, max_results_per_query, start_date=None, end_date=None):
+    def search(self, queries, days_back, max_results_per_query, start_date=None, end_date=None, use_news_topic=True):
         articles = []
         for query in queries:
             try:
@@ -58,13 +58,15 @@ class TavilyProvider(SearchProvider):
                 if start_date and end_date:
                     search_params["start_date"] = start_date
                     search_params["end_date"] = end_date
-                    search_params["topic"] = "news"
+                    if use_news_topic:
+                        search_params["topic"] = "news"
                 elif days_back > 0:
                     computed_end = datetime.now()
                     computed_start = computed_end - timedelta(days=days_back)
                     search_params["start_date"] = computed_start.strftime("%Y-%m-%d")
                     search_params["end_date"] = computed_end.strftime("%Y-%m-%d")
-                    search_params["topic"] = "news"
+                    if use_news_topic:
+                        search_params["topic"] = "news"
 
                 response = self.client.search(**search_params)
                 for result in response.get("results", []):
@@ -206,8 +208,8 @@ class UnifiedSearchEngine:
         else:
             return TavilyProvider()
 
-    def search(self, queries, days_back, max_results_per_query, start_date=None, end_date=None):
-        return self.provider.search(queries, days_back, max_results_per_query, start_date=start_date, end_date=end_date)
+    def search(self, queries, days_back, max_results_per_query, start_date=None, end_date=None, use_news_topic=True):
+        return self.provider.search(queries, days_back, max_results_per_query, start_date=start_date, end_date=end_date, use_news_topic=use_news_topic)
 
     def get_provider_name(self):
         return self.provider.get_provider_name()

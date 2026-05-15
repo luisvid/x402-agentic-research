@@ -4,8 +4,11 @@ Engine runner: builds initial state, calls workflow, extracts ResearchResponse.
 
 import hashlib
 import logging
+import os
 import time
 from uuid import uuid4
+
+from langchain_core.tracers.context import collect_runs
 
 from ..config import build_engine_config
 from ..schemas import ResearchRequest, ResearchResponse
@@ -30,6 +33,30 @@ def _get_workflow():
 def _cache_key(query: str, start_date: str, end_date: str, tier: str) -> str:
     raw = f"{query}|{start_date}|{end_date}|{tier}"
     return hashlib.md5(raw.encode()).hexdigest()
+
+
+def _log_feedback(run_id: str, response: ResearchResponse) -> None:
+    """Attach run metadata to the LangSmith trace. No-op when tracing is off."""
+    if os.getenv("LANGCHAIN_TRACING_V2", "").lower() != "true":
+        return
+    try:
+        from langsmith import Client
+
+        client = Client()
+        scores: list[tuple[str, float | None, str | None]] = [
+            ("tier", None, response.tier),
+            ("status", None, response.status),
+            ("source_count", float(len(response.sources)), None),
+            ("pipeline_seconds", response.timings.get("pipeline_seconds"), None),
+            ("mock_mode", 0.0, None),
+        ]
+        if response.confidence is not None:
+            scores.append(("confidence", response.confidence, None))
+        for key, score, value in scores:
+            client.create_feedback(run_id=run_id, key=key, score=score, value=value)
+        logger.debug(f"LangSmith feedback logged for run {run_id}")
+    except Exception:
+        logger.debug("LangSmith feedback logging failed", exc_info=True)
 
 
 def run_engine(req: ResearchRequest) -> ResearchResponse:
@@ -70,12 +97,14 @@ def run_engine(req: ResearchRequest) -> ResearchResponse:
     # Run the workflow — stream yields {node_name: state_update} for each node
     # Merge ALL node outputs, not just the last one
     merged = dict(initial_state)
-    for state in workflow.stream(initial_state, config={"configurable": {"thread_id": thread_id}}):
-        if isinstance(state, dict):
-            for node_name, node_output in state.items():
-                if isinstance(node_output, dict):
-                    logger.debug(f"Node '{node_name}' returned keys: {list(node_output.keys())}")
-                    merged.update(node_output)
+    with collect_runs() as cb:
+        for state in workflow.stream(initial_state, config={"configurable": {"thread_id": thread_id}}):
+            if isinstance(state, dict):
+                for node_name, node_output in state.items():
+                    if isinstance(node_output, dict):
+                        logger.debug(f"Node '{node_name}' returned keys: {list(node_output.keys())}")
+                        merged.update(node_output)
+    _langsmith_run_id = str(cb.traced_runs[-1].id) if cb.traced_runs else None
 
     elapsed = time.time() - start
     logger.info(f"Pipeline complete in {elapsed:.1f}s")
@@ -152,5 +181,8 @@ def run_engine(req: ResearchRequest) -> ResearchResponse:
 
     if status == "completed":
         _result_cache[cache_key] = response
+
+    if _langsmith_run_id:
+        _log_feedback(_langsmith_run_id, response)
 
     return response

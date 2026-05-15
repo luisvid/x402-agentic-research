@@ -44,5 +44,16 @@ def score_articles_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     articles.sort(key=lambda a: a.get("_relevance_score", 0), reverse=True)
 
-    logger.info(f"Article scoring complete: {len(articles)} articles ranked")
-    return {"research_search_results": articles, "research_article_scores": [], "errors": []}
+    # Drop articles that scored below 2/5, but always keep the top 5 as a floor
+    MIN_SCORE = 2
+    MIN_KEEP = 5
+    filtered = [a for a in articles if a.get("_relevance_score", 0) >= MIN_SCORE]
+    if len(filtered) < MIN_KEEP:
+        filtered = articles[:MIN_KEEP]
+
+    dropped = len(articles) - len(filtered)
+    if dropped:
+        logger.info(f"Filtered out {dropped} low-relevance articles (score < {MIN_SCORE})")
+
+    logger.info(f"Article scoring complete: {len(filtered)} articles kept")
+    return {"research_search_results": filtered, "research_article_scores": [], "errors": []}
